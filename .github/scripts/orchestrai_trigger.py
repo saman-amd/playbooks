@@ -138,7 +138,7 @@ def validate_config(cfg, batches):
 
 
 def make_plan(batch, git_ref, cfg, machines_per_hw_group, repo, sha, rocm_index_url,
-              hf_token=""):
+              hf_token="", npm_registry_url=""):
     platform = batch["platform"]
     device = batch["arch"]
     tags = batch["tags"]
@@ -172,6 +172,11 @@ def make_plan(batch, git_ref, cfg, machines_per_hw_group, repo, sha, rocm_index_
         # secret is unset so runs still work (just unauthenticated).
         if hf_token:
             variables["HF_TOKEN"] = hf_token
+        # Some playbook dependencies are mirrored through the internal npm
+        # registry. Keep that environment-specific URL in repository variables,
+        # never in this public source tree.
+        if npm_registry_url:
+            variables["NPM_REGISTRY_URL"] = npm_registry_url
         groups.append({
             "id": f"playbook-{pb_id}",
             "level": "L4-sys",
@@ -544,6 +549,14 @@ def main():
         print("::warning::ORCHESTRAI_HF_TOKEN not set — HuggingFace traffic will be "
               "unauthenticated and may hit the shared-IP rate limit (429)", file=sys.stderr)
 
+    # Optional globally, but required by the github-slack-development-digest
+    # dependency. Leaving it unset fails only that playbook with a precise setup
+    # error instead of blocking unrelated batches before acquisition.
+    npm_registry_url = os.environ.get("ORCHESTRAI_NPM_REGISTRY_URL", "")
+    if not npm_registry_url:
+        print("::warning::ORCHESTRAI_NPM_REGISTRY_URL not set — playbooks that require "
+              "mirrored npm packages will fail dependency setup", file=sys.stderr)
+
     # Prepare every batch first, and fail fast (before any POST) if a batch is
     # missing required provisioning — otherwise we'd acquire a scarce machine
     # that can't install its GPU stack and only fail much later on hardware.
@@ -555,7 +568,7 @@ def main():
             prov_missing[bid] = missing
         prepared.append((bid, batch,
                          make_plan(batch, git_ref, cfg, mphg, repo, sha,
-                                   rocm_index_url, hf_token),
+                                   rocm_index_url, hf_token, npm_registry_url),
                          builds))
 
     if not args.dry_run and prov_missing:

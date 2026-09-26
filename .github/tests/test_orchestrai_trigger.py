@@ -95,6 +95,37 @@ class AcquireTimeoutReachesThePipeline(unittest.TestCase):
         self.assertEqual(set(params), {"PLAN_JSON", "BUILDS_JSON", "OS_IMAGE", "ACQUIRE_TIMEOUT"})
         self.assertEqual(params["OS_IMAGE"], "windows")
 
+    def test_internal_npm_registry_is_passed_to_each_playbook_group(self):
+        cfg = load_config()
+        plan = trigger.make_plan(
+            BATCH,
+            "refs/heads/main",
+            cfg,
+            1,
+            "https://github.com/amd/playbooks",
+            "main",
+            "https://index.example",
+            npm_registry_url="https://npm.example/artifactory/api/npm/npm-virtual",
+        )
+        variables = plan["groups"][0]["variables"]
+        self.assertEqual(
+            variables["NPM_REGISTRY_URL"],
+            "https://npm.example/artifactory/api/npm/npm-virtual",
+        )
+
+    def test_unset_npm_registry_is_not_injected(self):
+        cfg = load_config()
+        plan = trigger.make_plan(
+            BATCH,
+            "refs/heads/main",
+            cfg,
+            1,
+            "https://github.com/amd/playbooks",
+            "main",
+            "https://index.example",
+        )
+        self.assertNotIn("NPM_REGISTRY_URL", plan["groups"][0]["variables"])
+
 
 class AcquireTimeoutValidation(unittest.TestCase):
 
