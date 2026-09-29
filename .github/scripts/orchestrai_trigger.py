@@ -172,13 +172,20 @@ def make_plan(batch, git_ref, cfg, machines_per_hw_group, repo, sha, rocm_index_
         # secret is unset so runs still work (just unauthenticated).
         if hf_token:
             variables["HF_TOKEN"] = hf_token
-        groups.append({
+        group = {
             "id": f"playbook-{pb_id}",
             "level": "L4-sys",
             "tests": [test],
             "maas_tags": tags,
             "variables": variables,
-        })
+        }
+        # A per-group OS image makes the broker re-image the acquired machine
+        # to it (device_os_images in orchestrai-config.yml); otherwise the
+        # pipeline requests the platform's stock image.
+        os_image = ((cfg.get("device_os_images") or {}).get(device) or {}).get(platform)
+        if os_image:
+            group["os_image"] = os_image
+        groups.append(group)
 
     return {
         "source": "external-playbook-batch",
